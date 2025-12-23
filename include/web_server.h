@@ -3,17 +3,18 @@
 
 #include <ESPAsyncWebServer.h>
 #include "stepper_controller.h"
+#include "laser_controller.h"
 
 class WebServer {
 private:
     AsyncWebServer* server;
     StepperController* stepperController;
+    LaserController* laserController;
     
     void setupRoutes();
-    String getIndexHTML();
     
 public:
-    WebServer(StepperController* controller);
+    WebServer(StepperController* controller, LaserController* laserCtrl);
     ~WebServer();
     
     void begin();

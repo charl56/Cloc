@@ -38,17 +38,24 @@
 // ============================================
 // Configuration Horloge
 // ============================================
-#define STEPS_PER_POSITION 53    // 3200 pas/tour ÷ 60 positions
-#define TOTAL_POSITIONS 60       // 60 positions (0-59)
-#define MICROSTEPS 16            // Microstepping 1/16
-
+#define STEPS_PER_REVOLUTION 200  // 200 pas en full step (M0=M1=M2=LOW)
+#define TOTAL_POSITIONS 60        // 60 positions (0-59 minutes)
+#define MICROSTEPS 1              // Full step, pas de microstepping
+#define STEP_DELAY_US 2000        // Délai entre deux pas en microsecondes
 // Vitesse moteur (pas/seconde)
-#define MOTOR_SPEED 200         // Vitesse par défaut
-#define MOTOR_ACCELERATION 500  // Accélération (pas/s²)
+#define MOTOR_SPEED 200           // Vitesse par défaut
+#define MOTOR_ACCELERATION 500    // Accélération (pas/s²)
+
 
 // ============================================
-// Constantes calculées
+// Configuration Lasers
 // ============================================
-#define STEPS_PER_REVOLUTION (200 * MICROSTEPS)  // 3200 pas pour 1 tour complet
+#define LASER1_PIN 12           // GPIO pour laser 1
+#define LASER2_PIN 14           // GPIO pour laser 2
+
+// Canaux PWM ESP32 (0-15 disponibles)
+#define LASER1_PWM_CHANNEL 0
+#define LASER2_PWM_CHANNEL 1
+
 
 #endif // CONFIG_H

@@ -1,9 +1,10 @@
 #include "web_server.h"
+#include "laser_controller.h"
 #include "config.h"
 #include <SPIFFS.h>
 
-WebServer::WebServer(StepperController *controller)
-    : stepperController(controller)
+WebServer::WebServer(StepperController *controller, LaserController *laserCtrl)
+    : stepperController(controller), laserController(laserCtrl)
 {
     server = new AsyncWebServer(WEB_SERVER_PORT);
 }
@@ -15,36 +16,42 @@ WebServer::~WebServer()
 
 void WebServer::begin()
 {
-    if (!SPIFFS.begin(true)) {
+    if (!SPIFFS.begin(true))
+    {
         Serial.println("Erreur: Impossible de monter SPIFFS");
-    } else {
+    }
+    else
+    {
         Serial.println("SPIFFS monté avec succès");
     }
     setupRoutes();
     server->begin();
     Serial.printf("Serveur web démarré sur le port %d\n", WEB_SERVER_PORT);
+    Serial.printf("Begin webserver, position : %d \n", stepperController->getMotor1Minutes());
+
 }
 
 void WebServer::setupRoutes()
 {
-    // Page principale
-    server->on("/", HTTP_GET, [this](AsyncWebServerRequest *request)
-               { 
-                request->send(200, "text/html", getIndexHTML()); 
-                // request->send(SPIFFS, "/index.html", "text/html");
-            });
-               
+
+    // Static files
+    server->serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
 
     // API: Get status
     server->on("/api/status", HTTP_GET, [this](AsyncWebServerRequest *request)
                {
         String json = "{";
-        json += "\"motor1\":" + String(stepperController->getMotor1Position()) + ",";
-        json += "\"motor2\":" + String(stepperController->getMotor2Position()) + ",";
+        json += "\"motor1\":" + String(stepperController->getMotor1Minutes()) + ",";
+        json += "\"motor2\":" + String(stepperController->getMotor2Minutes()) + ",";
         json += "\"motor1Moving\":" + String(stepperController->isMotor1Moving() ? "true" : "false") + ",";
         json += "\"motor2Moving\":" + String(stepperController->isMotor2Moving() ? "true" : "false");
         json += "}";
+        
+        Serial.printf("/api/status, position : %d \n", String(stepperController->getMotor1Minutes()));
+
         request->send(200, "application/json", json); });
+
+        
 
     // API: Set motor 1 position
     server->on("/api/motor1", HTTP_POST, [this](AsyncWebServerRequest *request)
@@ -81,305 +88,26 @@ void WebServer::setupRoutes()
                {
         stepperController->stopAll();
         request->send(200, "application/json", "{\"success\":true}"); });
-}
 
-String WebServer::getIndexHTML()
-{
-    return R"rawliteral(
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contrôle Horloge</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 500px;
-            width: 100%;
-        }
-        
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        
-        .motor-control {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 12px;
-        }
-        
-        .motor-label {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .motor-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-        }
-        
-        .motor-position {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
-            min-width: 60px;
-            text-align: right;
-        }
-        
-        .slider-container {
-            position: relative;
-        }
-        
-        input[type="range"] {
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: #ddd;
-            outline: none;
-            -webkit-appearance: none;
-        }
-        
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        input[type="range"]::-webkit-slider-thumb:hover {
-            background: #764ba2;
-            transform: scale(1.2);
-        }
-        
-        input[type="range"]::-moz-range-thumb {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-        }
-        
-        input[type="range"]::-moz-range-thumb:hover {
-            background: #764ba2;
-            transform: scale(1.2);
-        }
-        
-        .slider-labels {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 8px;
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .status {
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 20px;
-            font-size: 14px;
-        }
-        
-        .status.moving {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status.idle {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .btn-stop {
-            width: 100%;
-            padding: 15px;
-            margin-top: 20px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-stop:hover {
-            background: #c82333;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
-        }
-        
-        .btn-stop:active {
-            transform: translateY(0);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🕐 Contrôle Horloge</h1>
-        <div class="subtitle">ESP32 Stepper Control</div>
-        
-        <div class="motor-control">
-            <div class="motor-label">
-                <span class="motor-name">Moteur 1 (Heures)</span>
-                <span class="motor-position" id="motor1-value">0</span>
-            </div>
-            <div class="slider-container">
-                <input type="range" id="motor1-slider" min="0" max="59" value="0">
-                <div class="slider-labels">
-                    <span>0</span>
-                    <span>30</span>
-                    <span>59</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="motor-control">
-            <div class="motor-label">
-                <span class="motor-name">Moteur 2 (Minutes)</span>
-                <span class="motor-position" id="motor2-value">0</span>
-            </div>
-            <div class="slider-container">
-                <input type="range" id="motor2-slider" min="0" max="59" value="0">
-                <div class="slider-labels">
-                    <span>0</span>
-                    <span>30</span>
-                    <span>59</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="status idle" id="status">
-            ✓ Moteurs au repos
-        </div>
-        
-        <button class="btn-stop" onclick="stopMotors()">⏹ ARRÊT D'URGENCE</button>
-    </div>
+    // API: Set laser 1 position
+    server->on("/api/laser/{id}", HTTP_POST, [this](AsyncWebServerRequest *request)
+               {
+        AsyncWebParameter* p = request->getParam("id");
+        String laserId = p->value();
 
-    <script>
-        const motor1Slider = document.getElementById('motor1-slider');
-        const motor2Slider = document.getElementById('motor2-slider');
-        const motor1Value = document.getElementById('motor1-value');
-        const motor2Value = document.getElementById('motor2-value');
-        const statusDiv = document.getElementById('status');
-        
-        let updateTimeout1, updateTimeout2;
-        
-        // Update motor 1
-        motor1Slider.addEventListener('input', function() {
-            motor1Value.textContent = this.value;
-            clearTimeout(updateTimeout1);
-            updateTimeout1 = setTimeout(() => {
-                sendMotorPosition(1, this.value);
-            }, 300);
-        });
-        
-        // Update motor 2
-        motor2Slider.addEventListener('input', function() {
-            motor2Value.textContent = this.value;
-            clearTimeout(updateTimeout2);
-            updateTimeout2 = setTimeout(() => {
-                sendMotorPosition(2, this.value);
-            }, 300);
-        });
-        
-        // Send position to ESP32
-        async function sendMotorPosition(motor, position) {
-            try {
-                const response = await fetch(`/api/motor${motor}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: `position=${position}`
-                });
-                
-                if (response.ok) {
-                    console.log(`Motor ${motor} set to position ${position}`);
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
+        int id = laserId.toInt();
+
+        switch(id){
+            case 1:
+                laserController->getLaser1()->toggle();
+                break;
+            case 2:
+                laserController->getLaser2()->toggle();
+                break;
+            default:
+                request->send(400, "application/json", "{\"error\":\"Invalid laser ID\"}");
+                return;
         }
         
-        // Stop all motors
-        async function stopMotors() {
-            try {
-                await fetch('/api/stop', { method: 'POST' });
-                statusDiv.textContent = '⏹ Arrêt demandé';
-                statusDiv.className = 'status idle';
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-        
-        // Get status periodically
-        async function updateStatus() {
-            try {
-                const response = await fetch('/api/status');
-                const data = await response.json();
-                
-                motor1Slider.value = data.motor1;
-                motor2Slider.value = data.motor2;
-                motor1Value.textContent = data.motor1;
-                motor2Value.textContent = data.motor2;
-                
-                if (data.motor1Moving || data.motor2Moving) {
-                    statusDiv.textContent = '⚙ Moteurs en mouvement...';
-                    statusDiv.className = 'status moving';
-                } else {
-                    statusDiv.textContent = '✓ Moteurs au repos';
-                    statusDiv.className = 'status idle';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-        
-        // Update status every 500ms
-        setInterval(updateStatus, 500);
-        updateStatus();
-    </script>
-</body>
-</html>
-)rawliteral";
+        request->send(200, "application/json", "{\"success\":true}"); });
 }
